@@ -16,11 +16,9 @@ pub struct LogEntry {
 
 #[derive(Debug)]
 pub struct LogEntryExpanded {
-    pub project_id: ProjectId,
     pub task_id: TaskId,
     pub task_name: String,
     pub issue_number: Option<i32>,
-    pub description: Option<String>,
     pub date: Date,
     pub duration: Duration,
 }
@@ -34,19 +32,16 @@ pub fn add_log(conn: &mut SqliteConnection, entry: LogEntry) -> Result<()> {
     new_log(conn, entry.into())
 }
 
-pub fn show_by_day(conn: &mut SqliteConnection, period: Option<Period>) -> Result<()> {
-    let entries = get_by_day_expanded(conn, period)?;
+pub fn show_by_day(
+    conn: &mut SqliteConnection,
+    project: ProjectId,
+    period: Option<Period>,
+) -> Result<()> {
+    let entries = get_by_day_expanded(conn, project, period)?;
 
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
-    table.set_header(vec![
-        "Date",
-        "Weekday",
-        "Task",
-        "Issue",
-        "Description",
-        "Duration",
-    ]);
+    table.set_header(["Date", "Weekday", "Task", "Issue", "Duration"]);
     table.add_rows(entries.iter().map(|entry| {
         [
             entry.date.to_string(),
@@ -56,7 +51,6 @@ pub fn show_by_day(conn: &mut SqliteConnection, period: Option<Period>) -> Resul
                 .issue_number
                 .map(|n| format!("#{n}"))
                 .unwrap_or_else(|| "-".to_string()),
-            entry.description.clone().unwrap_or_else(|| "-".to_string()),
             entry.duration.to_string(),
         ]
     }));
@@ -73,23 +67,22 @@ pub fn show_by_day(conn: &mut SqliteConnection, period: Option<Period>) -> Resul
 
 pub fn show_by_issue(
     conn: &mut SqliteConnection,
+    project: ProjectId,
     period: Option<Period>,
     csv_to_clipboard: bool,
 ) -> Result<()> {
-    let entries = get_by_issue_expanded(conn, period)?;
+    let entries = get_by_issue_expanded(conn, project, period)?;
 
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
-    table.set_header(vec!["Project", "Task", "Issue", "Description", "Duration"]);
+    table.set_header(vec!["Task", "Issue", "Duration"]);
     table.add_rows(entries.iter().map(|entry| {
         [
-            entry.project_id.0.to_string(),
             entry.task_name.clone(),
             entry
                 .issue_number
                 .map(|n| format!("#{n}"))
                 .unwrap_or_else(|| "-".to_string()),
-            entry.description.clone().unwrap_or_else(|| "-".to_string()),
             entry.duration.to_string(),
         ]
     }));
@@ -105,10 +98,7 @@ pub fn show_by_issue(
                     .issue_number
                     .map(|n| format!("[#{n}] "))
                     .unwrap_or_default(),
-                entry
-                    .description
-                    .as_deref()
-                    .unwrap_or(entry.task_name.as_str()),
+                entry.task_name.as_str(),
                 entry.duration.whole_hours(),
             )
             .unwrap();
@@ -124,9 +114,13 @@ pub fn show_by_issue(
 
 pub fn get_by_day_expanded(
     conn: &mut SqliteConnection,
+    project: ProjectId,
     period: Option<Period>,
 ) -> Result<Vec<LogEntryExpanded>> {
-    let mut query = log_entries::table.inner_join(tasks::table).into_boxed();
+    let mut query = log_entries::table
+        .inner_join(tasks::table)
+        .filter(tasks::project_id.eq(project.0))
+        .into_boxed();
     if let Some(period) = period {
         query = query
             .filter(log_entries::date.ge(period.from))
@@ -142,9 +136,13 @@ pub fn get_by_day_expanded(
 
 pub fn get_by_issue_expanded(
     conn: &mut SqliteConnection,
+    project: ProjectId,
     period: Option<Period>,
 ) -> Result<Vec<LogEntryExpanded>> {
-    let mut query = log_entries::table.inner_join(tasks::table).into_boxed();
+    let mut query = log_entries::table
+        .inner_join(tasks::table)
+        .filter(tasks::project_id.eq(project.0))
+        .into_boxed();
     if let Some(period) = period {
         query = query
             .filter(log_entries::date.ge(period.from))
@@ -220,11 +218,9 @@ impl From<DbLogEntry> for LogEntry {
 impl From<(DbLogEntry, DbTask)> for LogEntryExpanded {
     fn from((log, task): (DbLogEntry, DbTask)) -> Self {
         Self {
-            project_id: ProjectId(task.project_id),
             task_id: TaskId(task.id),
             task_name: task.name,
             issue_number: task.issue,
-            description: task.description,
             date: log.date,
             duration: Duration::minutes(log.duration_minutes as i64),
         }

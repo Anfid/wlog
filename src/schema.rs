@@ -29,7 +29,6 @@ diesel::table! {
         project_id -> Integer,
         name -> Text,
         issue -> Nullable<Integer>,
-        description -> Nullable<Text>,
     }
 }
 

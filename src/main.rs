@@ -28,6 +28,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Log(args) => add_log(args),
         Command::Show(args) => show(args),
+        Command::Task(cmds) => task(cmds),
         Command::Project(cmds) => project(cmds),
         Command::Config(args) => config(args),
     }
@@ -77,11 +78,11 @@ fn add_log(options: AddLogCmd) -> Result<()> {
 
     let project = projects::get_default_or_create_interactive(&mut conn)?;
 
-    let issue = tasks::get_or_create(
+    let issue = tasks::get_or_create_interactive(
         &mut conn,
         project,
         options.issue,
-        options.description.as_deref(),
+        options.name.as_deref(),
     )?;
 
     let entry = log_entries::LogEntry {
@@ -116,9 +117,33 @@ fn show(args: ShowCmd) -> Result<()> {
         Some(Period { from, to })
     };
 
+    let project = projects::get_default_or_create_interactive(&mut conn)?;
+
     match args.by {
-        LogFormat::Day => log_entries::show_by_day(&mut conn, period),
-        LogFormat::Issue => log_entries::show_by_issue(&mut conn, period, true),
+        LogFormat::Day => log_entries::show_by_day(&mut conn, project, period),
+        LogFormat::Issue => log_entries::show_by_issue(&mut conn, project, period, true),
+    }
+}
+
+fn task(cmds: TaskCmd) -> Result<()> {
+    let config = Config::read()?.unwrap_or_default();
+    let mut conn = data::open(config.data_path.as_ref())?;
+
+    let project = projects::get_default_or_create_interactive(&mut conn)?;
+
+    match cmds {
+        TaskCmd::Update {
+            id,
+            issue,
+            no_issue,
+            name,
+        } => {
+            let issue = issue.map(Some).or_else(|| no_issue.then_some(None));
+            tasks::update(&mut conn, tasks::TaskId(id), name.as_deref(), issue)
+        }
+        TaskCmd::List => tasks::list(&mut conn, project),
+
+        TaskCmd::Search { query } => tasks::search(&mut conn, project, query),
     }
 }
 
@@ -171,6 +196,10 @@ enum Command {
     /// Display logged work information
     #[clap(alias("s"))]
     Show(ShowCmd),
+    /// Manage tasks
+    #[command(subcommand)]
+    #[clap(alias("issue"), alias("t"))]
+    Task(TaskCmd),
     /// Manage projects
     #[command(subcommand)]
     #[clap(alias("p"))]
@@ -215,9 +244,9 @@ struct AddLogCmd {
     /// Link issue number
     #[arg(short, long)]
     issue: Option<i32>,
-    /// Task description
-    #[arg(long = "desc")]
-    description: Option<String>,
+    /// Task name
+    #[arg(long)]
+    name: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -255,6 +284,24 @@ impl std::str::FromStr for LogFormat {
             _ => Err("Unknown log format"),
         }
     }
+}
+
+#[derive(Debug, Subcommand)]
+enum TaskCmd {
+    Update {
+        #[arg(long)]
+        id: i32,
+        #[arg(long = "set-name")]
+        name: Option<String>,
+        #[arg(long = "set-issue", group = "issue_value")]
+        issue: Option<i32>,
+        #[arg(long = "remove-issue", group = "issue_value")]
+        no_issue: bool,
+    },
+    List,
+    Search {
+        query: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
