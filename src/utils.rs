@@ -8,14 +8,14 @@ const MAX_ATTEMPTS: u32 = 3;
 pub const TABLE_STYLE: &str = "┃┃━━┣━┿┫│─┼┠┨┯┷┏┓┗┛";
 
 pub fn yn_prompt(msg: &str) -> Result<bool> {
-    eprintln!("{msg} [y/N]");
-    let term = Term::stdout();
+    eprintln!("{msg} [Y/n]");
+    let term = Term::stderr();
     let mut attempt = 1;
     loop {
         let answer = term.read_char()?;
         match answer {
-            'y' | 'Y' => break Ok(true),
-            'n' | 'N' | '\n' => break Ok(false),
+            'y' | 'Y' | '\n' => break Ok(true),
+            'n' | 'N' => break Ok(false),
             unknown => eprintln!(
                 "{} {}, press {} to confirm or {} to cancel",
                 "Unknown option:".yellow().bold(),
@@ -36,11 +36,9 @@ where
     T: FromStr,
     T::Err: Into<anyhow::Error>,
 {
-    let stdin = std::io::stdin();
-
     eprintln!("{msg} (leave empty for none):");
-    let mut buffer = String::new();
-    stdin.read_line(&mut buffer)?;
+    let mut rl = rustyline::DefaultEditor::new()?;
+    let buffer = rl.readline("")?;
     let str = buffer.trim();
     if str.is_empty() {
         Ok(None)
@@ -54,13 +52,11 @@ where
     T: FromStr,
     T::Err: Into<anyhow::Error>,
 {
-    let stdin = std::io::stdin();
-
-    let mut buffer = String::new();
     let mut attempt = 1;
     loop {
         eprintln!("{msg}:");
-        stdin.read_line(&mut buffer)?;
+        let mut rl = rustyline::DefaultEditor::new()?;
+        let buffer = rl.readline("")?;
         let str = buffer.trim();
         if str.is_empty() {
             eprintln!(

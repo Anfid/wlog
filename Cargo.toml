@@ -13,6 +13,7 @@ diesel = { version = "2.2.6", features = ["sqlite", "time", "returning_clauses_f
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 directories = "5.0.1"
 owo-colors = "4.1.0"
+rustyline = "15.0.0"
 serde = "1.0.216"
 time = { version = "0.3.37", features = ["local-offset", "serde"] }
 toml = "0.8.19"
