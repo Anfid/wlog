@@ -106,6 +106,11 @@ impl Config {
 
         Ok(())
     }
+
+    pub fn day_change_threshold(&self) -> Time {
+        self.day_change_threshold
+            .unwrap_or_else(|| Time::from_hms(12, 0, 0).unwrap())
+    }
 }
 
 fn directories() -> Result<ProjectDirs> {

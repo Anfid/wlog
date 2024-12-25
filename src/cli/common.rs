@@ -37,7 +37,7 @@ impl DateArgGroup {
         let date = if self.today {
             today
         } else if self.yesterday {
-            today - 1.days()
+            today.previous_day().unwrap()
         } else if let Some(weekday) = self.weekday {
             today.prev_occurrence(weekday)
         } else if let Some(date) = self.date {
@@ -58,12 +58,8 @@ impl DateArgGroup {
                 }
                 (Some(month), Some(year)) => Date::from_calendar_date(year, month, day)?,
             }
-        } else if now.time()
-            < config
-                .day_change_threshold
-                .unwrap_or_else(|| Time::from_hms(12, 0, 0).unwrap())
-        {
-            today - 1.days()
+        } else if now.time() < config.day_change_threshold() {
+            today.previous_day().unwrap()
         } else {
             today
         };
@@ -83,14 +79,34 @@ pub struct PeriodArgGroup {
     /// Only show entries up to this date, string in ISO8601 format
     #[arg(long, value_parser = date_value_parser)]
     to: Option<Date>,
+    /// Only show entries from this day
+    #[arg(long)]
+    today: bool,
+    /// Only show entries for the last 7 days
+    #[arg(short, long)]
+    week: bool,
 }
 
 impl PeriodArgGroup {
-    pub fn to_period(self, now: time::OffsetDateTime) -> Option<Period> {
-        let today = now.date();
+    pub fn to_period(self, config: &Config, now: time::OffsetDateTime) -> Option<Period> {
+        let today = if now.time() < config.day_change_threshold() {
+            now.date().previous_day().unwrap()
+        } else {
+            now.date()
+        };
 
         if self.all {
             None
+        } else if self.today {
+            Some(Period {
+                from: today,
+                to: today,
+            })
+        } else if self.week {
+            Some(Period {
+                from: today - 7.days(),
+                to: today,
+            })
         } else {
             let from = self.from.unwrap_or_else(|| {
                 (today - Duration::days(today.day() as i64))

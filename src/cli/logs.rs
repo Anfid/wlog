@@ -82,7 +82,7 @@ impl ShowCmd {
         let mut conn = data::open(config.data_path.as_ref())?;
 
         let now = OffsetDateTime::now_local()?;
-        let period = self.period.to_period(now);
+        let period = self.period.to_period(&config, now);
 
         let project = projects::get_default_or_create_interactive(&mut conn)?;
 
