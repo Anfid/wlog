@@ -35,11 +35,17 @@ impl TaskCmd {
                 name,
             } => {
                 let issue = issue.map(Some).or_else(|| no_issue.then_some(None));
-                tasks::update(&mut conn, tasks::TaskId(id), name.as_deref(), issue)
+                tasks::update(
+                    &mut conn,
+                    &project,
+                    tasks::TaskId(id),
+                    name.as_deref(),
+                    issue,
+                )
             }
             TaskCmd::List => tasks::list(&mut conn, project),
 
-            TaskCmd::Search { query } => tasks::search(&mut conn, project, query),
+            TaskCmd::Search { query } => tasks::search(&mut conn, &project, query),
         }
     }
 }

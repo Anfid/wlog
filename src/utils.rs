@@ -76,3 +76,7 @@ where
         eprintln!("{} Attempt {attempt}/{MAX_ATTEMPTS}", "Info:".cyan())
     }
 }
+
+pub fn fmt_issue_linked(issue: i32, project_url: &str) -> String {
+    format!("\u{1b}]8;;{project_url}/issues/{issue}\u{1b}\\#{issue}\u{1b}]8;;\u{1b}\\")
+}

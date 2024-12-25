@@ -1,12 +1,26 @@
-use crate::projects::ProjectId;
+use crate::projects::{Project, ProjectId};
 use crate::schema::tasks;
-use crate::utils::{prompt, prompt_opt, yn_prompt};
+use crate::utils::{fmt_issue_linked, prompt, prompt_opt, yn_prompt};
 use anyhow::Result;
+use diesel::deserialize::{FromSql, FromSqlRow};
+use diesel::expression::AsExpression;
 use diesel::prelude::*;
+use diesel::serialize::ToSql;
+use diesel::sqlite::Sqlite;
 use owo_colors::OwoColorize;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, AsExpression, FromSqlRow)]
+#[diesel(sql_type = diesel::sql_types::Integer)]
 pub struct TaskId(pub i32);
+
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::tasks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Task {
+    pub id: TaskId,
+    pub name: String,
+    pub issue: Option<i32>,
+}
 
 pub fn get_or_create_interactive(
     conn: &mut SqliteConnection,
@@ -23,7 +37,7 @@ pub fn get_or_create_interactive(
                 new_task(
                     conn,
                     NewTask {
-                        project_id: project.0,
+                        project_id: project,
                         issue: None,
                         name,
                     },
@@ -51,7 +65,7 @@ pub fn get_or_create_interactive(
                 new_task(
                     conn,
                     NewTask {
-                        project_id: project.0,
+                        project_id: project,
                         name,
                         issue: Some(issue),
                     },
@@ -74,7 +88,7 @@ pub fn create_interactive(
     };
 
     let task = NewTask {
-        project_id: project.0,
+        project_id: project,
         name: task_name.as_ref(),
         issue: issue_number,
     };
@@ -88,18 +102,18 @@ pub fn create_interactive(
     ))? {
         new_task(conn, task)
     } else {
-        anyhow::bail!("An issue wasn't created")
+        anyhow::bail!("A task wasn't created")
     }
 }
 
-pub fn list(conn: &mut SqliteConnection, project: ProjectId) -> Result<()> {
+pub fn list(conn: &mut SqliteConnection, project: Project) -> Result<()> {
     let tasks = tasks::table
-        .filter(tasks::project_id.eq(project.0))
-        .select(DbTask::as_select())
+        .filter(tasks::project_id.eq(project.id.0))
+        .select(Task::as_select())
         .limit(50)
         .get_results(conn)?;
 
-    print_task_list(&tasks);
+    print_task_list(&project.url, &tasks);
 
     if tasks.len() == 50 {
         println!("Task list was truncated");
@@ -107,7 +121,7 @@ pub fn list(conn: &mut SqliteConnection, project: ProjectId) -> Result<()> {
     Ok(())
 }
 
-pub fn search(conn: &mut SqliteConnection, project: ProjectId, query: String) -> Result<()> {
+pub fn search(conn: &mut SqliteConnection, project: &Project, query: String) -> Result<()> {
     let mut query = query
         .replace("\\", "\\\\")
         .replace("%", "\\%")
@@ -116,29 +130,30 @@ pub fn search(conn: &mut SqliteConnection, project: ProjectId, query: String) ->
     query.push('%');
 
     let tasks = tasks::table
-        .filter(tasks::project_id.eq(project.0))
-        .select(DbTask::as_select())
+        .filter(tasks::project_id.eq(project.id.0))
+        .select(Task::as_select())
         .filter(tasks::name.like(query))
         .get_results(conn)?;
 
-    print_task_list(&tasks);
+    print_task_list(&project.url, &tasks);
 
     Ok(())
 }
 
 pub fn update(
     conn: &mut SqliteConnection,
+    project: &Project,
     id: TaskId,
     name: Option<&str>,
     issue: Option<Option<i32>>,
 ) -> Result<()> {
     let task = diesel::update(tasks::table.find(id.0))
         .set(TaskUpdate { name, issue })
-        .returning(DbTask::as_select())
+        .returning(Task::as_select())
         .get_result(conn)?;
 
     eprintln!("{} Task has been updated", "Success:".green().bold());
-    print_task_list(&[task]);
+    print_task_list(&project.url, &[task]);
 
     Ok(())
 }
@@ -182,15 +197,15 @@ fn get_by_name(
         .map_err(Into::into)
 }
 
-fn print_task_list(tasks: &[DbTask]) {
+fn print_task_list(project_url: &str, tasks: &[Task]) {
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
     table.set_header(["ID", "Issue", "Name"]);
     table.add_rows(tasks.iter().map(|task| {
         [
-            task.id.to_string(),
+            task.id.0.to_string(),
             task.issue
-                .map(|i| format!("#{i}"))
+                .map(|i| fmt_issue_linked(i, project_url))
                 .unwrap_or("-".to_string()),
             task.name.clone(),
         ]
@@ -206,20 +221,28 @@ pub struct TaskUpdate<'a> {
     pub issue: Option<Option<i32>>,
 }
 
-#[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = crate::schema::tasks)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct DbTask {
-    pub id: i32,
-    pub name: String,
-    pub issue: Option<i32>,
-}
-
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::tasks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewTask<'a> {
-    pub project_id: i32,
+    pub project_id: ProjectId,
     pub name: &'a str,
     pub issue: Option<i32>,
+}
+
+impl FromSql<diesel::sql_types::Integer, Sqlite> for TaskId {
+    fn from_sql(
+        bytes: <Sqlite as diesel::backend::Backend>::RawValue<'_>,
+    ) -> diesel::deserialize::Result<Self> {
+        <i32 as FromSql<diesel::sql_types::Integer, Sqlite>>::from_sql(bytes).map(TaskId)
+    }
+}
+
+impl ToSql<diesel::sql_types::Integer, Sqlite> for TaskId {
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, Sqlite>,
+    ) -> diesel::serialize::Result {
+        <i32 as ToSql<diesel::sql_types::Integer, Sqlite>>::to_sql(&self.0, out)
+    }
 }

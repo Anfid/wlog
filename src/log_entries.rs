@@ -1,7 +1,8 @@
-use crate::projects::ProjectId;
+use crate::projects::{Project, ProjectId};
 use crate::schema::log_entries;
 use crate::schema::tasks;
-use crate::tasks::{DbTask, TaskId};
+use crate::tasks::{Task, TaskId};
+use crate::utils::fmt_issue_linked;
 use anyhow::Result;
 use diesel::prelude::*;
 use diesel::upsert::excluded;
@@ -34,23 +35,23 @@ pub fn add_log(conn: &mut SqliteConnection, entry: LogEntry) -> Result<()> {
 
 pub fn show_by_day(
     conn: &mut SqliteConnection,
-    project: ProjectId,
+    project: &Project,
     period: Option<Period>,
 ) -> Result<()> {
-    let entries = get_by_day_expanded(conn, project, period)?;
+    let entries = get_by_day_expanded(conn, project.id, period)?;
 
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
-    table.set_header(["Date", "Weekday", "Task", "Issue", "Duration"]);
+    table.set_header(["Date", "Weekday", "Issue", "Task", "Duration"]);
     table.add_rows(entries.iter().map(|entry| {
         [
             entry.date.to_string(),
             entry.date.weekday().to_string(),
-            entry.task_name.clone(),
             entry
                 .issue_number
-                .map(|n| format!("#{n}"))
+                .map(|n| fmt_issue_linked(n, &project.url))
                 .unwrap_or_else(|| "-".to_string()),
+            entry.task_name.clone(),
             entry.duration.to_string(),
         ]
     }));
@@ -65,24 +66,24 @@ pub fn show_by_day(
     Ok(())
 }
 
-pub fn show_by_issue(
+pub fn show_by_task(
     conn: &mut SqliteConnection,
-    project: ProjectId,
+    project: &Project,
     period: Option<Period>,
     csv_to_clipboard: bool,
 ) -> Result<()> {
-    let entries = get_by_issue_expanded(conn, project, period)?;
+    let entries = get_by_task_expanded(conn, project.id, period)?;
 
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
-    table.set_header(vec!["Task", "Issue", "Duration"]);
+    table.set_header(vec!["Issue", "Task", "Duration"]);
     table.add_rows(entries.iter().map(|entry| {
         [
-            entry.task_name.clone(),
             entry
                 .issue_number
-                .map(|n| format!("#{n}"))
+                .map(|n| fmt_issue_linked(n, &project.url))
                 .unwrap_or_else(|| "-".to_string()),
+            entry.task_name.clone(),
             entry.duration.to_string(),
         ]
     }));
@@ -127,14 +128,14 @@ pub fn get_by_day_expanded(
             .filter(log_entries::date.le(period.to));
     }
     query
-        .select((DbLogEntry::as_select(), DbTask::as_select()))
+        .select((DbLogEntry::as_select(), Task::as_select()))
         .order_by(log_entries::date)
-        .load_iter::<(DbLogEntry, DbTask), _>(conn)?
+        .load_iter::<(DbLogEntry, Task), _>(conn)?
         .map(|res| res.map(Into::into).map_err(Into::into))
         .collect()
 }
 
-pub fn get_by_issue_expanded(
+pub fn get_by_task_expanded(
     conn: &mut SqliteConnection,
     project: ProjectId,
     period: Option<Period>,
@@ -149,12 +150,12 @@ pub fn get_by_issue_expanded(
             .filter(log_entries::date.le(period.to));
     }
     query
-        .select((DbLogEntry::as_select(), DbTask::as_select()))
+        .select((DbLogEntry::as_select(), Task::as_select()))
         .order_by(log_entries::date)
-        .load_iter::<(DbLogEntry, DbTask), _>(conn)?
+        .load_iter::<(DbLogEntry, Task), _>(conn)?
         .try_fold(Vec::<LogEntryExpanded>::new(), |mut acc, entry| {
             let (log, task) = entry?;
-            if let Some(el) = acc.iter_mut().find(|el| el.task_id.0 == log.task_id) {
+            if let Some(el) = acc.iter_mut().find(|el| el.task_id == log.task_id) {
                 el.duration += Duration::minutes(log.duration_minutes as i64);
             } else {
                 acc.push(LogEntryExpanded::from((log, task)))
@@ -182,7 +183,7 @@ fn new_log(conn: &mut SqliteConnection, entry: DbNewEntry) -> Result<()> {
 #[diesel(belongs_to(crate::tasks::Task))]
 struct DbLogEntry {
     date: time::Date,
-    task_id: i32,
+    task_id: TaskId,
     duration_minutes: i32,
 }
 
@@ -191,7 +192,7 @@ struct DbLogEntry {
 #[diesel(table_name = crate::schema::log_entries)]
 struct DbNewEntry {
     date: time::Date,
-    task_id: i32,
+    task_id: TaskId,
     duration_minutes: i32,
 }
 
@@ -199,7 +200,7 @@ impl From<LogEntry> for DbNewEntry {
     fn from(value: LogEntry) -> Self {
         DbNewEntry {
             date: value.date,
-            task_id: value.task.0,
+            task_id: value.task,
             duration_minutes: value.duration.whole_minutes() as i32,
         }
     }
@@ -209,16 +210,16 @@ impl From<DbLogEntry> for LogEntry {
     fn from(value: DbLogEntry) -> Self {
         LogEntry {
             date: value.date,
-            task: TaskId(value.task_id),
+            task: value.task_id,
             duration: Duration::minutes(value.duration_minutes as i64),
         }
     }
 }
 
-impl From<(DbLogEntry, DbTask)> for LogEntryExpanded {
-    fn from((log, task): (DbLogEntry, DbTask)) -> Self {
+impl From<(DbLogEntry, Task)> for LogEntryExpanded {
+    fn from((log, task): (DbLogEntry, Task)) -> Self {
         Self {
-            task_id: TaskId(task.id),
+            task_id: task.id,
             task_name: task.name,
             issue_number: task.issue,
             date: log.date,

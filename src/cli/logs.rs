@@ -61,8 +61,12 @@ impl AddLogCmd {
         let date = self.date.to_date(&config, now)?;
         let project = projects::get_default_or_create_interactive(&mut conn)?;
 
-        let issue =
-            tasks::get_or_create_interactive(&mut conn, project, self.issue, self.name.as_deref())?;
+        let issue = tasks::get_or_create_interactive(
+            &mut conn,
+            project.id,
+            self.issue,
+            self.name.as_deref(),
+        )?;
 
         let entry = log_entries::LogEntry {
             date,
@@ -87,8 +91,8 @@ impl ShowCmd {
         let project = projects::get_default_or_create_interactive(&mut conn)?;
 
         match self.by {
-            LogFormat::Day => log_entries::show_by_day(&mut conn, project, period),
-            LogFormat::Issue => log_entries::show_by_issue(&mut conn, project, period, true),
+            LogFormat::Day => log_entries::show_by_day(&mut conn, &project, period),
+            LogFormat::Issue => log_entries::show_by_task(&mut conn, &project, period, true),
         }
     }
 }
