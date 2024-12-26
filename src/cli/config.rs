@@ -7,13 +7,14 @@ use time::Time;
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCmd {
-    DataPath {
-        new_path: Option<PathBuf>,
-    },
+    /// Get or set data path option
+    DataPath { new_path: Option<PathBuf> },
+    /// Get or set day change threshold option
     DayChangeThreshold {
         #[arg(value_parser = time_value_parser)]
         new_threshold: Option<time::Time>,
     },
+    /// Reset to default configuration
     Reset,
 }
 

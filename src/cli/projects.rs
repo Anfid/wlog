@@ -4,8 +4,11 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum ProjectCmd {
+    /// Create a new project
     Create,
+    /// List all existing projects
     List,
+    /// Pick a default project
     Default,
 }
 

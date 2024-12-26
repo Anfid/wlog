@@ -4,6 +4,7 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum TaskCmd {
+    /// Update an existing task
     Update {
         #[arg(long)]
         id: i32,
@@ -14,10 +15,10 @@ pub enum TaskCmd {
         #[arg(long = "remove-issue", group = "issue_value")]
         no_issue: bool,
     },
+    /// List all existing tasks
     List,
-    Search {
-        query: String,
-    },
+    /// Search for a task that contains the provided substring
+    Search { query: String },
 }
 
 impl TaskCmd {
