@@ -5,7 +5,7 @@ use clap::Args;
 use time::ext::NumericalDuration;
 use time::{Date, Duration, Time, Weekday};
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Default, Args)]
 pub struct DateArgGroup {
     /// Log entry date, today
     #[arg(long, group = "date_group")]
@@ -31,7 +31,7 @@ pub struct DateArgGroup {
 }
 
 impl DateArgGroup {
-    pub fn to_date(self, config: &Config, now: time::OffsetDateTime) -> Result<Date> {
+    pub fn to_date(&self, config: &Config, now: time::OffsetDateTime) -> Result<Date> {
         let today = now.date();
 
         let date = if self.today {
@@ -131,30 +131,42 @@ pub fn date_value_parser(v: &str) -> Result<Date, time::error::Parse> {
 
 pub fn duration_value_parser(v: &str) -> Result<Duration> {
     let mut unit = 60;
-    let mut result = 0;
-    let mut acc = 0;
+    let mut result = None;
+    let mut number = None;
     for c in v.chars() {
         match c {
-            '0'..='9' => acc = acc * 10 + (c as u8 - b'0') as i64,
+            '0'..='9' => number = Some(number.unwrap_or(0) * 10 + (c as u8 - b'0') as i64),
             'h' => {
-                result += acc * 60;
-                acc = 0;
+                let res = result.unwrap_or(0);
+                let acc = number.ok_or_else(|| anyhow::anyhow!("Number expected before unit"))?;
+                result = Some(res + acc * 60);
+                number = None;
                 unit = 1;
             }
             'm' => {
-                result += acc;
-                acc = 0;
+                let res = result.unwrap_or(0);
+                let acc = number.ok_or_else(|| anyhow::anyhow!("Number expected before unit"))?;
+                result = Some(acc + res);
+                number = None;
                 unit = 0;
             }
             unexpected => anyhow::bail!("Unexpected character in duration: '{unexpected}'"),
         }
     }
-    if unit == 0 && acc != 0 {
-        anyhow::bail!("Unable to parse duration, unknown unit for value {acc}");
+    if unit == 0 && number.is_some() {
+        anyhow::bail!(
+            "Unable to parse duration, unknown unit for value {}",
+            number.unwrap()
+        );
     }
-    result += acc * unit;
+    let minutes = match (result, number) {
+        (Some(r), Some(n)) => r + n * unit,
+        (Some(r), None) => r,
+        (None, Some(n)) => n * unit,
+        (None, None) => anyhow::bail!("Number expected"),
+    };
 
-    Ok(Duration::minutes(result))
+    Ok(Duration::minutes(minutes))
 }
 
 pub fn weekday_value_parser(v: &str) -> Result<Weekday> {
@@ -169,4 +181,103 @@ pub fn weekday_value_parser(v: &str) -> Result<Weekday> {
         _ => anyhow::bail!("Invalid weekday: \"{v}\""),
     };
     Ok(weekday)
+}
+
+#[cfg(test)]
+mod tests {
+    use time::{Month, OffsetDateTime};
+
+    use super::*;
+
+    #[test]
+    fn date_arg_group() {
+        let config = Config::default();
+        let now = OffsetDateTime::new_utc(
+            Date::from_calendar_date(2025, Month::January, 26).unwrap(),
+            Time::from_hms(10, 36, 21).unwrap(),
+        );
+        let group = DateArgGroup {
+            today: true,
+            ..Default::default()
+        };
+        assert_eq!(group.to_date(&config, now).unwrap(), now.date());
+
+        let group = DateArgGroup {
+            yesterday: true,
+            ..Default::default()
+        };
+        assert_eq!(group.to_date(&config, now).unwrap(), now.date() - 1.days());
+
+        let group = DateArgGroup {
+            weekday: Some(Weekday::Monday),
+            ..Default::default()
+        };
+        assert_eq!(
+            group.to_date(&config, now).unwrap(),
+            now.date().prev_occurrence(Weekday::Monday)
+        );
+
+        let group = DateArgGroup {
+            day: Some(100),
+            ..Default::default()
+        };
+        assert_eq!(group.to_date(&config, now).ok(), None);
+
+        let group = DateArgGroup {
+            day: Some(3),
+            ..Default::default()
+        };
+        assert_eq!(
+            group.to_date(&config, now).unwrap(),
+            now.date().replace_day(3).unwrap()
+        );
+    }
+
+    #[test]
+    fn duration_parser() {
+        let data = [
+            ("1", Some(60)),
+            ("10h", Some(10 * 60)),
+            ("8h30", Some(8 * 60 + 30)),
+            ("6h21m", Some(6 * 60 + 21)),
+            ("90m", Some(90)),
+            ("0", Some(0)),
+            ("0h", Some(0)),
+            ("0m", Some(0)),
+            ("0h0m", Some(0)),
+            ("10a", None),
+            ("hm", None),
+            ("", None),
+        ];
+        for (input, minutes) in data {
+            let parsed = duration_value_parser(input).ok();
+            assert_eq!(parsed, minutes.map(Duration::minutes));
+        }
+    }
+
+    #[test]
+    fn weekday_parser() {
+        let data = [
+            ("monday", Some(Weekday::Monday)),
+            ("tuesday", Some(Weekday::Tuesday)),
+            ("wednesday", Some(Weekday::Wednesday)),
+            ("thursday", Some(Weekday::Thursday)),
+            ("friday", Some(Weekday::Friday)),
+            ("saturday", Some(Weekday::Saturday)),
+            ("sunday", Some(Weekday::Sunday)),
+            ("tursday", None),
+            ("", None),
+            ("mon", Some(Weekday::Monday)),
+            ("tue", Some(Weekday::Tuesday)),
+            ("wed", Some(Weekday::Wednesday)),
+            ("thu", Some(Weekday::Thursday)),
+            ("fri", Some(Weekday::Friday)),
+            ("sat", Some(Weekday::Saturday)),
+            ("sun", Some(Weekday::Sunday)),
+        ];
+        for (input, output) in data {
+            let parsed = weekday_value_parser(input).ok();
+            assert_eq!(parsed, output);
+        }
+    }
 }
