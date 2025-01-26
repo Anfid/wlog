@@ -3,7 +3,7 @@ use crate::log_entries::Period;
 use anyhow::Result;
 use clap::Args;
 use time::ext::NumericalDuration;
-use time::{Date, Duration, Time};
+use time::{Date, Duration, Time, Weekday};
 
 #[derive(Debug, Clone, Args)]
 pub struct DateArgGroup {
@@ -14,8 +14,8 @@ pub struct DateArgGroup {
     #[arg(long, group = "date_group")]
     yesterday: bool,
     /// Log entry date, nearest past weekday
-    #[arg(short, long, group = "date_group")]
-    weekday: Option<time::Weekday>,
+    #[arg(short, long, value_parser = weekday_value_parser, group = "date_group")]
+    weekday: Option<Weekday>,
     /// Log entry date, string in ISO8601 format
     #[arg(long, value_parser = date_value_parser, group = "date_group")]
     date: Option<Date>,
@@ -88,7 +88,7 @@ pub struct PeriodArgGroup {
 }
 
 impl PeriodArgGroup {
-    pub fn to_period(self, config: &Config, now: time::OffsetDateTime) -> Option<Period> {
+    pub fn to_period(&self, config: &Config, now: time::OffsetDateTime) -> Option<Period> {
         let today = if now.time() < config.day_change_threshold() {
             now.date().previous_day().unwrap()
         } else {
@@ -155,4 +155,18 @@ pub fn duration_value_parser(v: &str) -> Result<Duration> {
     result += acc * unit;
 
     Ok(Duration::minutes(result))
+}
+
+pub fn weekday_value_parser(v: &str) -> Result<Weekday> {
+    let weekday = match v.to_lowercase().as_str() {
+        "mon" | "monday" => Weekday::Monday,
+        "tue" | "tuesday" => Weekday::Tuesday,
+        "wed" | "wednesday" => Weekday::Wednesday,
+        "thu" | "thursday" => Weekday::Thursday,
+        "fri" | "friday" => Weekday::Friday,
+        "sat" | "saturday" => Weekday::Saturday,
+        "sun" | "sunday" => Weekday::Sunday,
+        _ => anyhow::bail!("Invalid weekday: \"{v}\""),
+    };
+    Ok(weekday)
 }

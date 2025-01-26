@@ -6,6 +6,7 @@ mod config;
 mod data;
 mod log_entries;
 mod projects;
+mod schedule;
 mod schema;
 mod tasks;
 mod utils;

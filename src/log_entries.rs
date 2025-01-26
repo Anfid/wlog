@@ -1,4 +1,5 @@
 use crate::projects::{Project, ProjectId};
+use crate::schedule;
 use crate::schema::log_entries;
 use crate::schema::tasks;
 use crate::tasks::{Task, TaskId};
@@ -29,7 +30,8 @@ pub struct Period {
     pub to: Date,
 }
 
-pub fn add_log(conn: &mut SqliteConnection, entry: LogEntry) -> Result<()> {
+pub fn add_log(conn: &mut SqliteConnection, project: ProjectId, entry: LogEntry) -> Result<()> {
+    schedule::log(conn, project, entry.date)?;
     new_log(conn, entry.into())
 }
 

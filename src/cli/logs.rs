@@ -35,8 +35,8 @@ pub enum LogFormat {
     #[default]
     #[clap(alias("date"))]
     Day,
-    #[clap(alias("task"))]
-    Issue,
+    #[clap(alias("issue"))]
+    Task,
 }
 
 impl std::str::FromStr for LogFormat {
@@ -44,7 +44,7 @@ impl std::str::FromStr for LogFormat {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "issue" => Ok(LogFormat::Issue),
+            "issue" => Ok(LogFormat::Task),
             "day" => Ok(LogFormat::Day),
             _ => Err("Unknown log format"),
         }
@@ -74,7 +74,7 @@ impl AddLogCmd {
             task: issue,
         };
 
-        log_entries::add_log(&mut conn, entry)?;
+        log_entries::add_log(&mut conn, project.id, entry)?;
 
         Ok(())
     }
@@ -92,7 +92,7 @@ impl ShowCmd {
 
         match self.by {
             LogFormat::Day => log_entries::show_by_day(&mut conn, &project, period),
-            LogFormat::Issue => log_entries::show_by_task(&mut conn, &project, period, true),
+            LogFormat::Task => log_entries::show_by_task(&mut conn, &project, period, true),
         }
     }
 }

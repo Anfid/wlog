@@ -23,6 +23,9 @@ pub enum Command {
     #[command(subcommand)]
     #[clap(alias("p"))]
     Project(projects::ProjectCmd),
+    /// Manage project schedule
+    #[command(subcommand)]
+    Schedule(projects::ScheduleCmd),
     /// Update configuration
     #[command(subcommand)]
     Config(config::ConfigCmd),
@@ -41,6 +44,7 @@ impl Cli {
             Command::Show(cmd) => cmd.dispatch(),
             Command::Task(cmd) => cmd.dispatch(),
             Command::Project(cmd) => cmd.dispatch(),
+            Command::Schedule(cmd) => cmd.dispatch(),
             Command::Config(cmd) => cmd.dispatch(),
         }
     }
