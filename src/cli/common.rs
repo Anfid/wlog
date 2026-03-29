@@ -107,15 +107,15 @@ impl PeriodArgGroup {
                 from: today - 7.days(),
                 to: today,
             })
+        } else if self.from.is_none() && self.to.is_none() {
+            let from = (today - Duration::days(today.day() as i64))
+                .replace_day(1)
+                .unwrap();
+            let to = today - Duration::days(today.day() as i64);
+            Some(Period { from, to })
         } else {
-            let from = self.from.unwrap_or_else(|| {
-                (today - Duration::days(today.day() as i64))
-                    .replace_day(1)
-                    .unwrap()
-            });
-            let to = self
-                .to
-                .unwrap_or_else(|| today - Duration::days(today.day() as i64));
+            let to = self.to.unwrap_or_else(|| now.date());
+            let from = self.from.unwrap_or_else(|| to - Duration::weeks(1));
             Some(Period { from, to })
         }
     }
