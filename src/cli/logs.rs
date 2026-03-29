@@ -28,6 +28,9 @@ pub struct ShowCmd {
     /// Period
     #[clap(flatten)]
     period: PeriodArgGroup,
+    /// Include comments in the output
+    #[arg(short, long)]
+    comments: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, ValueEnum)]
@@ -91,8 +94,12 @@ impl ShowCmd {
         let project = projects::get_default_or_create_interactive(&mut conn)?;
 
         match self.by {
-            LogFormat::Day => log_entries::show_by_day(&mut conn, &project, period),
-            LogFormat::Task => log_entries::show_by_task(&mut conn, &project, period, true),
+            LogFormat::Day => {
+                log_entries::show_by_day(&mut conn, &project, period.as_ref(), self.comments)
+            }
+            LogFormat::Task => {
+                log_entries::show_by_task(&mut conn, &project, period.as_ref(), true)
+            }
         }
     }
 }

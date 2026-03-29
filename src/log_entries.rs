@@ -1,3 +1,4 @@
+use crate::comments;
 use crate::projects::{Project, ProjectId};
 use crate::schedule;
 use crate::schema::log_entries;
@@ -38,24 +39,45 @@ pub fn add_log(conn: &mut SqliteConnection, project: ProjectId, entry: LogEntry)
 pub fn show_by_day(
     conn: &mut SqliteConnection,
     project: &Project,
-    period: Option<Period>,
+    period: Option<&Period>,
+    show_comments: bool,
 ) -> Result<()> {
     let entries = get_by_day_expanded(conn, project.id, period)?;
+
+    let comment_entries = if show_comments {
+        comments::get_by_period(conn, project.id, period)?
+    } else {
+        Vec::new()
+    };
+
+    let rows = merge_entries_and_comments(&entries, &comment_entries);
 
     let mut table = comfy_table::Table::new();
     table.load_preset(crate::utils::TABLE_STYLE);
     table.set_header(["Date", "Weekday", "Issue", "Task", "Duration"]);
-    table.add_rows(entries.iter().map(|entry| {
-        [
-            entry.date.to_string(),
-            entry.date.weekday().to_string(),
-            entry
-                .issue_number
-                .map(|n| fmt_issue_linked(n, &project.url))
-                .unwrap_or_else(|| "-".to_string()),
-            entry.task_name.clone(),
-            entry.duration.to_string(),
-        ]
+    table.add_rows(rows.iter().map(|row| {
+        match row {
+            DisplayRow::LogEntry(entry) => [
+                entry.date.to_string(),
+                entry.date.weekday().to_string(),
+                entry
+                    .issue_number
+                    .map(|n| fmt_issue_linked(n, &project.url))
+                    .unwrap_or_else(|| "-".to_string()),
+                entry.task_name.clone(),
+                entry.duration.to_string(),
+            ],
+            DisplayRow::Comment(comment) => [
+                comment.date.to_string(),
+                comment.date.weekday().to_string(),
+                "-".to_string(),
+                format!("~ {} ~", comment.text),
+                comment
+                    .duration
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+            ],
+        }
     }));
 
     println!("{table}");
@@ -71,7 +93,7 @@ pub fn show_by_day(
 pub fn show_by_task(
     conn: &mut SqliteConnection,
     project: &Project,
-    period: Option<Period>,
+    period: Option<&Period>,
     csv_to_clipboard: bool,
 ) -> Result<()> {
     let entries = get_by_task_expanded(conn, project.id, period)?;
@@ -118,7 +140,7 @@ pub fn show_by_task(
 pub fn get_by_day_expanded(
     conn: &mut SqliteConnection,
     project: ProjectId,
-    period: Option<Period>,
+    period: Option<&Period>,
 ) -> Result<Vec<LogEntryExpanded>> {
     let mut query = log_entries::table
         .inner_join(tasks::table)
@@ -140,7 +162,7 @@ pub fn get_by_day_expanded(
 pub fn get_by_task_expanded(
     conn: &mut SqliteConnection,
     project: ProjectId,
-    period: Option<Period>,
+    period: Option<&Period>,
 ) -> Result<Vec<LogEntryExpanded>> {
     let mut query = log_entries::table
         .inner_join(tasks::table)
@@ -164,6 +186,32 @@ pub fn get_by_task_expanded(
             }
             Ok(acc)
         })
+}
+
+enum DisplayRow<'a> {
+    LogEntry(&'a LogEntryExpanded),
+    Comment(&'a comments::CommentExpanded),
+}
+
+fn merge_entries_and_comments<'a>(
+    entries: &'a [LogEntryExpanded],
+    comments: &'a [comments::CommentExpanded],
+) -> Vec<DisplayRow<'a>> {
+    let mut rows = Vec::with_capacity(entries.len() + comments.len());
+    let mut ei = 0;
+    let mut ci = 0;
+    while ei < entries.len() && ci < comments.len() {
+        if entries[ei].date <= comments[ci].date {
+            rows.push(DisplayRow::LogEntry(&entries[ei]));
+            ei += 1;
+        } else {
+            rows.push(DisplayRow::Comment(&comments[ci]));
+            ci += 1;
+        }
+    }
+    rows.extend(entries[ei..].iter().map(DisplayRow::LogEntry));
+    rows.extend(comments[ci..].iter().map(DisplayRow::Comment));
+    rows
 }
 
 fn new_log(conn: &mut SqliteConnection, entry: DbNewEntry) -> Result<()> {

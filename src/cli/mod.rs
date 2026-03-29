@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod comments;
 mod common;
 mod config;
 mod logs;
@@ -26,6 +27,9 @@ pub enum Command {
     /// Manage project schedule
     #[command(subcommand)]
     Schedule(projects::ScheduleCmd),
+    /// Add a comment
+    #[clap(visible_alias("c"))]
+    Comment(comments::AddCommentCmd),
     /// Update configuration
     #[command(subcommand)]
     Config(config::ConfigCmd),
@@ -45,6 +49,7 @@ impl Cli {
             Command::Task(cmd) => cmd.dispatch(),
             Command::Project(cmd) => cmd.dispatch(),
             Command::Schedule(cmd) => cmd.dispatch(),
+            Command::Comment(cmd) => cmd.dispatch(),
             Command::Config(cmd) => cmd.dispatch(),
         }
     }

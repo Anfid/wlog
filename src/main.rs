@@ -2,6 +2,7 @@ use clap::Parser;
 use owo_colors::OwoColorize;
 
 mod cli;
+mod comments;
 mod config;
 mod data;
 mod log_entries;
