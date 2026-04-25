@@ -1,7 +1,7 @@
 use super::common::time_value_parser;
 use crate::Config;
-use anyhow::Result;
 use clap::Subcommand;
+use eyre::Result;
 use std::path::PathBuf;
 use time::Time;
 

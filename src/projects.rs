@@ -1,11 +1,11 @@
 use crate::schema::{default_project, projects};
 use crate::utils::{prompt, prompt_opt, yn_prompt};
-use anyhow::Result;
 use diesel::deserialize::{FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
 use diesel::prelude::*;
 use diesel::serialize::ToSql;
 use diesel::sqlite::Sqlite;
+use eyre::{Result, bail};
 use owo_colors::OwoColorize;
 
 #[derive(Debug, Copy, Clone, AsExpression, FromSqlRow)]
@@ -57,7 +57,7 @@ pub fn create_interactive(conn: &mut SqliteConnection) -> Result<Project> {
         eprintln!("{} New project created", "Success:".green().bold());
         Ok(pid)
     } else {
-        anyhow::bail!("A project wasn't created")
+        bail!("A project wasn't created")
     }
 }
 
@@ -93,7 +93,6 @@ fn create(conn: &mut SqliteConnection, url: String, name: Option<String>) -> Res
         .values(project)
         .returning(Project::as_select())
         .get_result(conn)
-        .map(Into::into)
         .map_err(Into::into)
 }
 
@@ -107,14 +106,13 @@ fn get_default(conn: &mut SqliteConnection) -> Result<Option<Project>> {
         .inner_join(projects::table)
         .select(Project::as_select())
         .get_result::<Project>(conn)
-        .map(Into::into)
         .optional()
         .map_err(Into::into)
 }
 
 fn set_default(conn: &mut SqliteConnection, id: ProjectId) -> Result<()> {
     if !diesel::select(diesel::dsl::exists(projects::table.find(id.0))).get_result(conn)? {
-        anyhow::bail!("Project {} doesn't exist", id.0);
+        bail!("Project {} doesn't exist", id.0);
     }
 
     diesel::insert_into(default_project::table)

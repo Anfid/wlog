@@ -1,7 +1,7 @@
-use super::common::{duration_value_parser, DateArgGroup, PeriodArgGroup};
-use crate::{data, log_entries, projects, tasks, Config};
-use anyhow::Result;
+use super::common::{DateArgGroup, PeriodArgGroup, duration_value_parser};
+use crate::{Config, data, log_entries, projects, tasks};
 use clap::{Args, ValueEnum};
+use eyre::Result;
 use time::{Duration, OffsetDateTime};
 
 #[derive(Debug, Args)]

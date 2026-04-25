@@ -1,12 +1,14 @@
+use std::fmt::Write;
+
 use crate::projects::{Project, ProjectId};
 use crate::schema::tasks;
 use crate::utils::{fmt_issue_linked, prompt, prompt_opt, yn_prompt};
-use anyhow::Result;
 use diesel::deserialize::{FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
 use diesel::prelude::*;
 use diesel::serialize::ToSql;
 use diesel::sqlite::Sqlite;
+use eyre::Result;
 use owo_colors::OwoColorize;
 
 #[derive(Debug, Eq, PartialEq, Hash, AsExpression, FromSqlRow)]
@@ -102,22 +104,30 @@ pub fn create_interactive(
     ))? {
         new_task(conn, task)
     } else {
-        anyhow::bail!("A task wasn't created")
+        eyre::bail!("A task wasn't created")
     }
 }
 
-pub fn list(conn: &mut SqliteConnection, project: Project) -> Result<()> {
+pub fn list(conn: &mut SqliteConnection, project: &Project) -> Result<()> {
     let tasks = tasks::table
         .filter(tasks::project_id.eq(project.id.0))
         .select(Task::as_select())
-        .limit(50)
         .get_results(conn)?;
 
     print_task_list(&project.url, &tasks);
 
-    if tasks.len() == 50 {
-        println!("Task list was truncated");
-    }
+    Ok(())
+}
+
+pub fn search_interactive(conn: &mut SqliteConnection, project: &Project) -> Result<()> {
+    let tasks = tasks::table
+        .filter(tasks::project_id.eq(project.id.0))
+        .select(Task::as_select())
+        .get_results(conn)?;
+
+    let out = pick_task_list(tasks).unwrap();
+    println!("{out:?}");
+
     Ok(())
 }
 
@@ -211,6 +221,22 @@ fn print_task_list(project_url: &str, tasks: &[Task]) {
         ]
     }));
     println!("{table}");
+}
+
+fn pick_task_list(tasks: Vec<Task>) -> eyre::Result<skim::SkimOutput> {
+    skim::Skim::run_items(skim::SkimOptions::default(), tasks)
+}
+
+impl skim::SkimItem for Task {
+    fn text(&self) -> std::borrow::Cow<'_, str> {
+        let mut txt = String::new();
+        write!(&mut txt, "{} - ", self.id.0).unwrap();
+        if let Some(i) = self.issue {
+            write!(&mut txt, "[#{i}] ").unwrap();
+        }
+        write!(&mut txt, "{}", self.name).unwrap();
+        txt.into()
+    }
 }
 
 #[derive(Debug, AsChangeset)]

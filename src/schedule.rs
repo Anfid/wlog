@@ -1,8 +1,8 @@
 use crate::projects::ProjectId;
 use crate::schema::{schedule_logs, schedule_settings};
-use anyhow::Result;
 use diesel::prelude::*;
 use diesel::upsert::excluded;
+use eyre::Result;
 use time::{Date, Weekday};
 
 #[derive(Debug, Clone, Copy)]

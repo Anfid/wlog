@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Result};
 use diesel::prelude::*;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use eyre::{Result, anyhow};
 use std::path::Path;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

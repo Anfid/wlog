@@ -1,6 +1,6 @@
 use crate::utils::yn_prompt;
-use anyhow::Result;
 use directories::ProjectDirs;
+use eyre::{Result, anyhow, bail};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf};
@@ -86,7 +86,7 @@ impl Config {
 
     pub fn reset() -> Result<()> {
         if !yn_prompt("Do you want to reset to default configuration?")? {
-            anyhow::bail!("Config reset aborted");
+            bail!("Config reset aborted");
         }
         let dirs = directories()?;
         let config_folder = dirs.config_dir();
@@ -115,5 +115,5 @@ impl Config {
 
 fn directories() -> Result<ProjectDirs> {
     directories::ProjectDirs::from("net", "Anfid", "wlog")
-        .ok_or_else(|| anyhow::anyhow!("Unable to find app data directory for the current system"))
+        .ok_or_else(|| anyhow!("Unable to find app data directory for the current system"))
 }

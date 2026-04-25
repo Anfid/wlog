@@ -1,8 +1,8 @@
 use super::common::{date_value_parser, weekday_value_parser};
 use crate::schedule::{ScheduleLog, WeekBasedSchedule};
-use crate::{data, projects, schedule, Config};
-use anyhow::Result;
+use crate::{Config, data, projects, schedule};
 use clap::Subcommand;
+use eyre::{Result, bail};
 use owo_colors::OwoColorize;
 use time::{Date, Weekday};
 
@@ -63,7 +63,7 @@ impl ScheduleCmd {
                         print_calendar(date, bitmap);
                         Ok(())
                     } else {
-                        anyhow::bail!("No results")
+                        bail!("No results")
                     }
                 } else if let Some(result) = schedule::get(&mut conn, project.id)? {
                     println!("Active schedule:");
@@ -79,7 +79,7 @@ impl ScheduleCmd {
                     println!("Flexible: {}", result.is_flexible());
                     Ok(())
                 } else {
-                    anyhow::bail!("No results")
+                    bail!("No results")
                 }
             }
             ScheduleCmd::Set { weekdays, rigid } => schedule::set(

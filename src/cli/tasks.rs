@@ -1,6 +1,6 @@
-use crate::{data, projects, tasks, Config};
-use anyhow::Result;
+use crate::{Config, data, projects, tasks};
 use clap::Subcommand;
+use eyre::Result;
 
 #[derive(Debug, Subcommand)]
 pub enum TaskCmd {
@@ -18,7 +18,7 @@ pub enum TaskCmd {
     /// List all existing tasks
     List,
     /// Search for a task that contains the provided substring
-    Search { query: String },
+    Search { query: Option<String> },
 }
 
 impl TaskCmd {
@@ -44,9 +44,9 @@ impl TaskCmd {
                     issue,
                 )
             }
-            TaskCmd::List => tasks::list(&mut conn, project),
-
-            TaskCmd::Search { query } => tasks::search(&mut conn, &project, query),
+            TaskCmd::List => tasks::list(&mut conn, &project),
+            TaskCmd::Search { query: Some(query) } => tasks::search(&mut conn, &project, query),
+            TaskCmd::Search { query: None } => tasks::search_interactive(&mut conn, &project),
         }
     }
 }

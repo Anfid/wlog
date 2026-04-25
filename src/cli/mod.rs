@@ -1,5 +1,5 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
+use eyre::Result;
 
 mod comments;
 mod common;

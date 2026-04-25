@@ -1,8 +1,8 @@
 use crate::log_entries::Period;
 use crate::projects::ProjectId;
 use crate::schema::comments;
-use anyhow::Result;
 use diesel::prelude::*;
+use eyre::Result;
 use time::{Date, Duration};
 
 #[derive(Debug)]

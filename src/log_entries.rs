@@ -5,9 +5,9 @@ use crate::schema::log_entries;
 use crate::schema::tasks;
 use crate::tasks::{Task, TaskId};
 use crate::utils::fmt_issue_linked;
-use anyhow::Result;
 use diesel::prelude::*;
 use diesel::upsert::excluded;
+use eyre::Result;
 use time::{Date, Duration};
 
 #[derive(Debug)]
@@ -130,8 +130,10 @@ pub fn show_by_task(
             csv
         });
         let csv = String::from_utf8(csv).unwrap();
+        println!();
         let mut clipboard = arboard::Clipboard::new().unwrap();
-        clipboard.set_text(csv).unwrap();
+        clipboard.set_text(&csv).unwrap();
+        println!("{csv}")
     }
 
     Ok(())

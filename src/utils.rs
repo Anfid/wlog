@@ -1,5 +1,5 @@
-use anyhow::Result;
 use console::Term;
+use eyre::{Error, Result, bail};
 use owo_colors::OwoColorize;
 use std::str::FromStr;
 
@@ -26,7 +26,7 @@ pub fn yn_prompt(msg: &str) -> Result<bool> {
         }
         attempt += 1;
         if attempt > MAX_ATTEMPTS {
-            anyhow::bail!("Unable to parse response in {MAX_ATTEMPTS} attempts");
+            bail!("Unable to parse response in {MAX_ATTEMPTS} attempts");
         }
     }
 }
@@ -34,7 +34,7 @@ pub fn yn_prompt(msg: &str) -> Result<bool> {
 pub fn prompt_opt<T>(msg: &str) -> Result<Option<T>>
 where
     T: FromStr,
-    T::Err: Into<anyhow::Error>,
+    T::Err: Into<Error>,
 {
     eprintln!("{msg} (leave empty for none):");
     let mut rl = rustyline::DefaultEditor::new()?;
@@ -50,7 +50,7 @@ where
 pub fn prompt<T>(msg: &str) -> Result<T>
 where
     T: FromStr,
-    T::Err: Into<anyhow::Error>,
+    T::Err: Into<Error>,
 {
     let mut attempt = 1;
     loop {
@@ -71,7 +71,7 @@ where
         }
         attempt += 1;
         if attempt > 3 {
-            anyhow::bail!("Unable to parse response in {MAX_ATTEMPTS} attempts");
+            bail!("Unable to parse response in {MAX_ATTEMPTS} attempts");
         }
         eprintln!("{} Attempt {attempt}/{MAX_ATTEMPTS}", "Info:".cyan())
     }

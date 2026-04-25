@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::log_entries::Period;
-use anyhow::Result;
 use clap::Args;
+use eyre::{Result, anyhow, bail};
 use time::ext::NumericalDuration;
 use time::{Date, Duration, Time, Weekday};
 
@@ -138,32 +138,31 @@ pub fn duration_value_parser(v: &str) -> Result<Duration> {
             '0'..='9' => number = Some(number.unwrap_or(0) * 10 + (c as u8 - b'0') as i64),
             'h' => {
                 let res = result.unwrap_or(0);
-                let acc = number.ok_or_else(|| anyhow::anyhow!("Number expected before unit"))?;
+                let acc = number.ok_or_else(|| anyhow!("Number expected before unit"))?;
                 result = Some(res + acc * 60);
                 number = None;
                 unit = 1;
             }
             'm' => {
                 let res = result.unwrap_or(0);
-                let acc = number.ok_or_else(|| anyhow::anyhow!("Number expected before unit"))?;
+                let acc = number.ok_or_else(|| anyhow!("Number expected before unit"))?;
                 result = Some(acc + res);
                 number = None;
                 unit = 0;
             }
-            unexpected => anyhow::bail!("Unexpected character in duration: '{unexpected}'"),
+            unexpected => bail!("Unexpected character in duration: '{unexpected}'"),
         }
     }
-    if unit == 0 && number.is_some() {
-        anyhow::bail!(
-            "Unable to parse duration, unknown unit for value {}",
-            number.unwrap()
-        );
+    if let Some(number) = number
+        && unit == 0
+    {
+        bail!("Unable to parse duration, unknown unit for value {number}",);
     }
     let minutes = match (result, number) {
         (Some(r), Some(n)) => r + n * unit,
         (Some(r), None) => r,
         (None, Some(n)) => n * unit,
-        (None, None) => anyhow::bail!("Number expected"),
+        (None, None) => bail!("Number expected"),
     };
 
     Ok(Duration::minutes(minutes))
@@ -178,7 +177,7 @@ pub fn weekday_value_parser(v: &str) -> Result<Weekday> {
         "fri" | "friday" => Weekday::Friday,
         "sat" | "saturday" => Weekday::Saturday,
         "sun" | "sunday" => Weekday::Sunday,
-        _ => anyhow::bail!("Invalid weekday: \"{v}\""),
+        _ => bail!("Invalid weekday: \"{v}\""),
     };
     Ok(weekday)
 }
